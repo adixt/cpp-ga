@@ -79,9 +79,9 @@ int main()
 	int xd[allNodes] = { 80, 120, 98, 0, 0 };
 
 	x[0] = { 70, 140, 88, x_inf, x_inf }; // initial stock level
-	//Print2DVector<int>(x, "stock level ");
+										  //Print2DVector<int>(x, "stock level ");
 
-	// Demand
+										  // Demand
 	vector<int> dmax{ 10, 15, 20 };
 	two_dimension_vector_int d(n, vector<int>(simTime, {})); // int d[n][simTime] = {};
 
@@ -139,7 +139,7 @@ int main()
 
 	double tt = ComputeTimeEnd();
 	cout << "CPU time: " << tt << " ms\n";
-
+	system("pause");
 	return 0;
 }
 
