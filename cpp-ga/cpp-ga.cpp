@@ -15,8 +15,8 @@ const int ns = 2;
 const int allNodes = n + ns;
 int LT[allNodes][n] = {};
 
-const int x_inf = 100000;
-const int simTime = 60;
+const float x_inf = 100000;
+const int simTime = 10000;
 #include "vector_types.h"
 #include "vector_operators.h"
 #include "vector_operations.h"
@@ -48,7 +48,7 @@ int main()
 	// max lead time
 	int L = *max_element(start, start + allNodes * n);
 
-	float LA_nom[allNodes][n] = {};
+	two_dimension_vector_float LA_nom(allNodes, vector<float>(n));// float LA_nom[allNodes][n] = {};
 	three_dimension_vector_float LA(simTime, vector<vector<float>>(allNodes, vector<float>(n)));
 
 	LA[0][3][0] = LA_nom[3][0] = 1;
@@ -71,30 +71,36 @@ int main()
 	}
 
 	// Initial conditions
-	int time[simTime] = {};
-	int u[n][simTime] = {};
-	two_dimension_vector_float u_hist(n, vector<float>(simTime, 0)); // order history
-	two_dimension_vector_int x(simTime, vector<int>(allNodes, 0));
-	int y[allNodes][simTime] = {};
-	int xd[allNodes] = { 80, 120, 98, 0, 0 };
+	two_dimension_vector_float u(simTime, vector<float>(n, 0)); //order quantity
+	two_dimension_vector_float ur(simTime, vector<float>(n, 0)); //orders received
+	two_dimension_vector_float u_hist(simTime, vector<float>(n, 0)); // order history
+	two_dimension_vector_float x(simTime + 1, vector<float>(allNodes, 0)); //stock level
+	two_dimension_vector_float y(simTime, vector<float>(allNodes, 0));
+	two_dimension_vector_float h(simTime, vector<float>(allNodes, 0)); //satisfied demand
+	two_dimension_vector_float d(simTime, vector<float>(allNodes, 0)); //demand
+	two_dimension_vector_float S_u(simTime, vector<float>(allNodes, 0));
+	two_dimension_vector_float S_u_mod(simTime, vector<float>(allNodes, 0));
+	vector<float> xd = { 80, 120, 98, 0, 0 };
+	vector<float> xd_sub(&xd[0], &xd[n]);
 
 	x[0] = { 70, 140, 88, x_inf, x_inf }; // initial stock level
 										  //Print2DVector<int>(x, "stock level ");
 
 										  // Demand
 	vector<int> dmax{ 10, 15, 20 };
-	two_dimension_vector_int d(n, vector<int>(simTime, {})); // int d[n][simTime] = {};
 
 	for (int j = 0; j < simTime; j++) {
 		double multiplier = 1;
 		for (int k = 0; k < n; k++) {
 			double demand = multiplier * dmax[k] * rnd();
 			int randomDemand = static_cast<int>(round(demand));
-			if (randomDemand > dmax[k]) d[k][j] = dmax[k];
-			else d[k][j] = randomDemand;
+			if (randomDemand > dmax[k]) d[j][k] = dmax[k];
+			else d[j][k] = randomDemand;
+			// FOR A DEBUG, YOU CAN SET CONST DEMAND = MAXDEMAND
+			//d[j][k] = dmax[k];
 		}
 	};
-	//Print2DVector<int>(d, "demand");
+	//Print2DVector<float>(d, "demand");
 
 	// State - space description
 	// System matrices
@@ -136,6 +142,152 @@ int main()
 
 	vector<float> xd_min = GetXdMin(n, L, B, Lambda, dmax);
 	PrintVector(xd_min, "xd min");
+
+
+	// Main OUT policy loop
+	for (int t = 0; t < simTime; t++) {
+		// Calculate input proposal
+		//First determine open - order quantity
+		vector<float> o_q(n, 0);
+		if (t < L) {
+			int counter = 0;
+			for (int i = 0; i < L; i++)
+			{
+				for (int j = i; j < L; j++)
+				{
+					if (t - i > 0) {
+						vector<float> step1 = Multiple2dEigenBy1dEigen(B[t - i - 1][j], u_hist[t - i - 1]);
+						o_q = o_q + step1;
+					}
+				}
+			}
+		}
+		else {
+			for (int i = 0; i < L; i++)
+			{
+				for (int j = i; j < L; j++)
+				{
+					vector<float> step1 = Multiple2dEigenBy1dEigen(B[t - i - 1][j], u_hist[t - i - 1]);
+					o_q = o_q + step1;
+				}
+			}
+		}
+		// Calculate input proposal
+		// Classical OUT
+		vector<float> x_sub(&x[t][0], &x[t][n]);
+		u[t] = xd_sub - x_sub - o_q; // (eq 14)
+
+
+		for (int i = 0; i < u[t].size(); i++) {
+			if (u[t][i] < 0) {
+				u[t][i] = 0;
+			}
+		}
+
+		u_hist[t] = u[t];
+
+		if (t < L) {
+			for (int j = 0; j < n; j++) { // j - index of recipient
+				ur[t][j] = 0;
+				for (int i = 0; i < allNodes; i++) // i - index of sender
+				{
+					if (t - LT[i][j] >= 0)
+					{
+						int lt = LT[i][j];
+						int ts = t - lt;
+						ur[t][j] = ur[t][j] + LA[ts][i][j] * u_hist[ts][j];
+
+					}
+				}
+
+			}
+		}
+		else {
+			for (int j = 0; j < n; j++) { // j - index of recipient
+				ur[t][j] = 0;
+				for (int i = 0; i < allNodes; i++) // i - index of sender
+				{
+					int lt = LT[i][j];
+					int ts = t - lt;
+					ur[t][j] = ur[t][j] + LA[ts][i][j] * u_hist[ts][j];
+				}
+			}
+		}
+
+		// Satisfied demand
+		vector<float> d_sub(&d[t][0], &d[t][n]);
+		if (d_sub < x_sub + ur[t]) {
+			h[t] = d_sub;
+		}
+		else {
+			h[t] = x_sub;
+		}
+
+		// Goods sent inside controlled network
+		// Available stock for internal demand
+		y[t] = x[t];
+
+		vector<float> y_sub(&y[t][0], &y[t][n]);
+		y_sub = x_sub + ur[t] - h[t];
+		copy_n(y_sub.cbegin(), n, y[t].begin());
+
+		// Total internal requests imposed at controlled nodes and external suppliers
+		S_u[t] = Multiple2dEigenBy1dEigen(LA[0], u[t]);
+
+		// Check if the available stock suffices to satisfy the internal requests, separately for each
+		// node.If not - the deficiency is distributed according to the load generated by
+		// request originators
+		// Other methods to explore later on
+		LA[t] = LA_nom;
+
+		for (int i = 0; i < n; i++) { // i is the node index inside the controlled network
+			float tmp = y[t][i] - S_u[t][i];
+
+			if (tmp < 0) {
+				// Decrease the allocation weights corresponding to requests placed at internal nodes
+				// Keep input history intact
+				for (int j = 0; j < n; j++) {
+					LA[t][j][i] = LA_nom[j][i] * (1 + tmp / S_u[t][i]);
+
+					if (LA[t][j][i] < 0) {
+						bool flaga = true;
+					}
+				}
+			}
+		}
+
+		// Update delay matrices B for delay 1 to L, update of B_0 is not required
+		B[t] = B_nom;
+
+		for (int k = 0; k < L; k++) {// index k corresponds to delay k
+			for (int j = 0; j < n; j++) {
+				float t_sum = 0;
+				for (int i = 0; i < allNodes; i++) {
+					if (LT[i][j] == k + 1) {
+						t_sum = t_sum + LA[t][i][j];
+					}
+				}
+				B[t][k][j][j] = t_sum;
+			}
+		}
+
+		S_u_mod[t] = Multiple2dEigenBy1dEigen(LA[t], u_hist[t]);
+
+		x[t + 1] = y[t] - S_u_mod[t];
+
+	}
+	// End of OUT Main loop
+
+	vector<float> varianceU = GetVarianceFrom2dVector<float>(u_hist);
+	PrintVector(varianceU, "Variance of U");
+
+	vector<float> varianceD = GetVarianceFrom2dVector<float>(d);
+	vector<float> varianceD_sub(&varianceD[0], &varianceD[n]);
+	PrintVector(varianceD_sub, "Variance of Demand");
+
+	vector<float> varianceX = GetVarianceFrom2dVector<float>(x);
+	vector<float> varianceX_sub(&varianceX[0], &varianceX[n]);
+	PrintVector(varianceX_sub, "Variance of X");
 
 	double tt = ComputeTimeEnd();
 	cout << "CPU time: " << tt << " ms\n";

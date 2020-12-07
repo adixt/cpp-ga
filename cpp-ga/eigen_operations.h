@@ -8,9 +8,9 @@ using namespace std;
 vector<float> GetXdMin(int n, int L, four_dimension_vector_float&  B, two_dimension_vector_float&  Lambda, vector<int>&  dmax) {
 	// Reference stock level for full demand satisfaction
 	two_dimension_vector_float summed(n, vector<float>(n));
-	
+
 	// table index k corresponds to the delay k
-	for (int k = 0; k < L; k++) 
+	for (int k = 0; k < L; k++)
 	{
 		two_dimension_vector_float multiplied = B[0][k];
 		Multiply2DVectorByScalar(multiplied, static_cast<float>(k + 1));
@@ -48,4 +48,31 @@ vector<float> GetXdMin(int n, int L, four_dimension_vector_float&  B, two_dimens
 		xd_min[i] = step5M(i, 0);	// eq 23	
 	}
 	return xd_min;
+}
+
+
+vector<float> Multiple2dEigenBy1dEigen(two_dimension_vector_float&  MatrixA, vector<float>&  MatrixB) {
+	int sizeA = MatrixA.size();
+	int sizeB = MatrixB.size();
+	Eigen::MatrixXf step1M(sizeA, sizeB);
+	Eigen::MatrixXf step2M(sizeB, 1);
+	Eigen::MatrixXf step3M(sizeB, 1);
+
+	for (int i = 0; i < sizeA; i++) {
+		for (int j = 0; j < sizeB; j++) {
+			step1M(i, j) = MatrixA[i][j];
+		}
+	}
+
+	for (int i = 0; i < sizeB; i++) {
+		step2M(i, 0) = MatrixB[i];
+	}
+
+	step3M = step1M * step2M;
+	vector<float> result(sizeA);
+	for (int i = 0; i < sizeA; i++) {
+		result[i] = step3M(i, 0);
+	}
+
+	return result;
 }
