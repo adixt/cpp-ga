@@ -289,6 +289,38 @@ int main()
 	vector<float> varianceX_sub(&varianceX[0], &varianceX[n]);
 	PrintVector(varianceX_sub, "Variance of X");
 
+
+	// Calculate BI Indicators
+	float maxVarU = *max_element(varianceU.begin(), varianceU.end());
+	float minVarU = *min_element(varianceU.begin(), varianceU.end());
+	float maxVarD = *max_element(varianceD_sub.begin(), varianceD_sub.end());
+	float minVarD = *min_element(varianceD_sub.begin(), varianceD_sub.end());
+
+	float w1 = maxVarU / minVarD;
+	cout << "W1: max Var U / min Var D -> theoretical max lim BI: " << w1 << endl;
+
+	float w2 = minVarU / maxVarD;
+	cout << "W2: min Var U / max Var D -> theoretical min lim BI: " << w2 << endl;
+
+	vector<float> biVector = varianceU / varianceD_sub;
+	float w3 = *max_element(biVector.begin(), biVector.end());
+	cout << "W3: max Var U / max Var D -> BI determinant, ||x||Inf, LpInf: " << w3 << endl;
+
+	//float summedSquaresVarU = accumulate(varianceU.begin(), varianceU.end(), 0, square<float>());
+	//float euclideanVarU = sqrt(summedSquaresVarU); // this gives the proper result too
+	//float summedSquaresVarD = accumulate(varianceD_sub.begin(), varianceD_sub.end(), 0, square<float>());
+	//float euclideanVarD = sqrt(summedSquaresVarD); // this gives the proper result too
+	float euclideanVarU = vectorNorm(varianceU.begin(), varianceU.end());
+	float euclideanVarD = vectorNorm(varianceD_sub.begin(), varianceD_sub.end());
+	float w4 = euclideanVarU / euclideanVarD;
+	cout << "W4: Euclidean Var U / Euclidean  Var D -> mean BI determinant, ||x||2, Lp 2: " << w4 << endl;
+
+	float manhattanVarU = accumulate(varianceU.begin(), varianceU.end(), 0);
+	float manhattanVarD = accumulate(varianceD_sub.begin(), varianceD_sub.end(), 0);
+	float w5 = manhattanVarU / manhattanVarD;
+	cout << "W5: Manhattan Var U / Manhattan  Var D -> ||x||1, Lp 1, maximum absolute column sum: " << w5 << endl;
+	// End of BI calculations
+
 	double tt = ComputeTimeEnd();
 	cout << "CPU time: " << tt << " ms\n";
 	system("pause");

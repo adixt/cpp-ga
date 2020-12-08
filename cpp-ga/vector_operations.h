@@ -129,3 +129,17 @@ T varianceImproved(const vector<T> &vec) {
 
 	return accumulate(vec.begin(), vec.end(), 0.0, variance_func);
 }
+
+template<typename T>
+struct square
+{
+	T operator()(const T& Left, const T& Right) const
+	{
+		return (Left + Right*Right);
+	}
+};
+
+template<typename Iter_T>
+long double vectorNorm(Iter_T first, Iter_T last) {
+	return sqrt(inner_product(first, last, first, 0.0L));
+}
